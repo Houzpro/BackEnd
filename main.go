@@ -227,9 +227,9 @@ func main() {
 	{
 		router.GET("/books", getBooks)
 		router.GET("/books/:id", getBookByID)
-		router.POST("/books", createBook)
-		router.PUT("/books/:id", updateBook)
-		router.DELETE("/books/:id", deleteBook)
+		router.POST("/books", roleMiddleware("admin"), createBook)
+		router.PUT("/books/:id", roleMiddleware("admin"), updateBook)
+		router.DELETE("/books/:id", roleMiddleware("admin"), deleteBook)
 	}
 	router.Run(":8080")
 }
