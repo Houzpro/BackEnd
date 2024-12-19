@@ -206,7 +206,7 @@ type Book struct {
 }
 
 func initDB() {
-	dsn := "host=localhost user=postgres password=qwe123993 dbname=Backend_Prak port=5432 sslmode=disable"
+	dsn := "host=localhost user=postgres password=Qwe123993 dbname=Backend_Prak port=5432 sslmode=disable"
 	var err error
 	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
