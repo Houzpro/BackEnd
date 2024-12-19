@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -121,7 +122,7 @@ func register(c *gin.Context) {
 		return
 	}
 
-	// По умолчанию рол�� "user", можно добавить проверку или параметр для роли
+	// По умолчанию роль "user", можно добавить проверку или параметр для роли
 	role := "user" // Устанавливаем роль по умолчанию как "user"
 
 	// Можно добавить параметр для роли в запросе регистрации, например:
@@ -205,7 +206,7 @@ type Book struct {
 }
 
 func initDB() {
-	dsn := "host=localhost user=postgres password=qwe123993 dbname=Backend_Prak port=5432 sslmode=disable"
+	dsn := "host=150.241.77.103 user=postgres password=qwe123993 dbname=Backend_Prak port=5432 sslmode=disable"
 	var err error
 	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -236,15 +237,36 @@ func main() {
 
 func getBooks(c *gin.Context) {
 	var books []Book
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "3"))
+	offset := (page - 1) * pageSize
+
 	if db == nil {
 		log.Println("Database connection is nil")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database connection is nil"})
 		return
 	}
-	if err := db.Find(&books).Error; err != nil {
+
+	query := db.Limit(pageSize).Offset(offset)
+
+	// Filtering by attributes
+	if title := c.Query("title"); title != "" {
+		query = query.Where("title ILIKE ?", "%"+title+"%")
+	}
+	if author := c.Query("author"); author != "" {
+		query = query.Where("author ILIKE ?", "%"+author+"%")
+	}
+
+	// Sorting by field
+	if sort := c.Query("sort"); sort != "" {
+		query = query.Order(sort)
+	}
+
+	if err := query.Find(&books).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch books"})
 		return
 	}
+
 	c.JSON(http.StatusOK, books)
 }
 
@@ -264,7 +286,10 @@ func createBook(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request"})
 		return
 	}
-	db.Create(&newBook)
+	if err := db.Create(&newBook).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to create book"})
+		return
+	}
 	c.JSON(http.StatusCreated, newBook)
 }
 
