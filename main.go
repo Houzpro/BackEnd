@@ -1,6 +1,7 @@
 package main
 
 import (
+	"gin-notes-api/tasks"
 	"log"
 	"net/http"
 	"strconv"
@@ -237,6 +238,31 @@ func main() {
 		router.PUT("/updatePublishers", updatePublishers)
 		router.GET("/countBooksByAuthor", countBooksByAuthor)
 	}
+
+	// Task routes
+	router.POST("/tasks", func(c *gin.Context) {
+		taskID := tasks.CreateTask()
+		cancelChan := make(chan struct{})
+		go tasks.RunTask(taskID, cancelChan)
+		c.JSON(201, gin.H{"task_id": taskID})
+	})
+
+	router.GET("/tasks/:id", func(c *gin.Context) {
+		taskID := c.Param("id")
+		task := tasks.GetTask(taskID)
+		if task == nil {
+			c.JSON(404, gin.H{"error": "Task not found"})
+			return
+		}
+		c.JSON(200, task)
+	})
+
+	router.DELETE("/tasks/:id", func(c *gin.Context) {
+		taskID := c.Param("id")
+		tasks.CancelTask(taskID)
+		c.JSON(200, gin.H{"message": "Task cancelled"})
+	})
+
 	router.Run(":8080")
 }
 
