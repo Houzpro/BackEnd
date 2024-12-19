@@ -200,9 +200,11 @@ func refresh(c *gin.Context) {
 }
 
 type Book struct {
-	ID     uint   `gorm:"primaryKey" json:"id"`
-	Title  string `json:"title"`
-	Author string `json:"author"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	Title     string `json:"title"`
+	Author    string `json:"author"`
+	Year      int    `json:"year"`
+	Publisher string `json:"publisher,omitempty"`
 }
 
 func initDB() {
@@ -231,6 +233,9 @@ func main() {
 		router.POST("/books", roleMiddleware("admin"), createBook)
 		router.PUT("/books/:id", roleMiddleware("admin"), updateBook)
 		router.DELETE("/books/:id", roleMiddleware("admin"), deleteBook)
+		router.GET("/booksByYearRange", getBooksByYearRange)
+		router.PUT("/updatePublishers", updatePublishers)
+		router.GET("/countBooksByAuthor", countBooksByAuthor)
 	}
 	router.Run(":8080")
 }
@@ -314,4 +319,77 @@ func deleteBook(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "book deleted"})
+}
+
+func getBooksByYearRange(c *gin.Context) {
+	startYear := c.Query("startYear")
+	endYear := c.Query("endYear")
+
+	var books []Book
+	if err := db.Where("year BETWEEN ? AND ?", startYear, endYear).Find(&books).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching books"})
+		return
+	}
+	c.JSON(http.StatusOK, books)
+}
+
+func updatePublishers(c *gin.Context) {
+	newPublisher := c.Query("publisher")
+	author := c.Query("author") // Add author as a query parameter
+	if newPublisher == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "publisher parameter is required"})
+		return
+	}
+	if author == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "author parameter is required"})
+		return
+	}
+
+	log.Println("Starting transaction to update publishers")
+
+	// Start a transaction
+	tx := db.Begin()
+	if tx.Error != nil {
+		log.Println("Failed to start transaction")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start transaction"})
+		return
+	}
+	log.Println("Transaction started")
+
+	// Perform the update with a WHERE clause
+	if err := tx.Model(&Book{}).Where("author = ?", author).Update("publisher", newPublisher).Error; err != nil {
+		log.Println("Failed to update publishers, rolling back transaction")
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update publishers"})
+		return
+	}
+	log.Println("Publishers updated successfully")
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		log.Println("Failed to commit transaction, rolling back")
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit transaction"})
+		return
+	}
+	log.Println("Transaction committed successfully")
+
+	c.JSON(http.StatusOK, gin.H{"message": "publishers updated successfully"})
+}
+
+func countBooksByAuthor(c *gin.Context) {
+	var results []struct {
+		Author string
+		Count  int
+	}
+
+	if err := db.Model(&Book{}).
+		Select("author, COUNT(*) as count").
+		Group("author").
+		Scan(&results).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count books by author"})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
 }
