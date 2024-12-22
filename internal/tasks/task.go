@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type Task struct {
@@ -54,7 +56,6 @@ func RunTask(taskID string, cancelChan chan struct{}) {
 
 	select {
 	case <-time.After(5 * time.Second):
-		// Simulate a long-running process
 		log.Printf("Task %s is writing to file", taskID)
 		file, err := os.Create(filename)
 		if err != nil {
@@ -87,4 +88,25 @@ func CancelTask(taskID string) {
 
 func generateID() string {
 	return time.Now().Format("20060102150405")
+}
+
+func CreateTaskHandler(c *gin.Context) {
+	taskID := CreateTask()
+	c.JSON(200, gin.H{"task_id": taskID})
+}
+
+func GetTaskHandler(c *gin.Context) {
+	taskID := c.Param("id")
+	task := GetTask(taskID)
+	if task == nil {
+		c.JSON(404, gin.H{"error": "Task not found"})
+		return
+	}
+	c.JSON(200, task)
+}
+
+func CancelTaskHandler(c *gin.Context) {
+	taskID := c.Param("id")
+	CancelTask(taskID)
+	c.JSON(200, gin.H{"status": "Task cancelled"})
 }
